@@ -1,8 +1,12 @@
 package main
 
-import "github.com/gin-gonic/gin"
-import "net/http"
-import "strconv"
+import (
+	"log"
+	"net/http"
+	"strconv"
+
+	"github.com/gin-gonic/gin"
+)
 
 func main() {
 	r := gin.Default()
@@ -12,7 +16,10 @@ func main() {
 		})
 	})
 	r.POST("/dice/roll", diceRollHandler)
-	r.Run(":8080")
+	err := r.Run(":8080")
+	if err != nil {
+		log.Fatal("Error when running")
+	}
 }
 
 func diceRollHandler(c *gin.Context) {
