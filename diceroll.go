@@ -1,13 +1,13 @@
 package main
 
 import (
-    "fmt"
-    "math/rand"
-    "time"
+	"math/rand"
+	"time"
 )
 
-
-func rollDie(numDie int, sides int, player string) int {
+// RollDie simulates rolling n dice with x sides.
+func RollDie(numDie int, sides int) int {
+	// TODO Should seed once at beginning of app
 	rand.Seed(time.Now().UTC().UnixNano())
 	i := 0
 	result := 0
@@ -15,27 +15,5 @@ func rollDie(numDie int, sides int, player string) int {
 		result = result + (1 + rand.Intn(sides))
 		i++
 	}
-    fmt.Printf("%s rolls a %dd%d for %d\n", player, numDie, sides, result)
-
-    dice := fmt.Sprintf("%dd%d", numDie, sides)
-    q := fmt.Sprintf("INSERT INTO user_tbl (name, dice, result) VALUES (%s, %s, %d);", player, dice, result)
-    fmt.Println(dice)
-    fmt.Println(q)
-	return result // or whatever, query, 2d6... 
+	return result
 }
-
-
-func main() {
-    rollDie(2, 12, "nate")
-    rollDie(2, 12, "nate")
-    rollDie(2, 12, "nate")
-    rollDie(2, 12, "nate")
-    rollDie(2, 12, "nate")
-    rollDie(2, 12, "nate")
-    rollDie(2, 12, "nate")
-    rollDie(2, 12, "nate")
-    rollDie(2, 12, "nate")
-    rollDie(2, 12, "nate")
-    rollDie(2, 12, "nate")
-}
-
