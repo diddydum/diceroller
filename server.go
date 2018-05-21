@@ -5,10 +5,24 @@ import (
 	"net/http"
 	"strconv"
 
+	"database/sql"
+
 	"github.com/gin-gonic/gin"
+
+	_ "github.com/lib/pq"
 )
 
 func main() {
+	// Attempt to connect to sql db, and don't really do anything after that.
+	connStr := "postgres://diceroller:diceroller@localhost/diceroller?sslmode=disable"
+	db, err := sql.Open("postgres", connStr)
+	if err != nil {
+		log.Fatal("Error while connecting to postgres: ", err)
+	}
+	if err := db.Ping(); err != nil {
+		log.Fatal("Error while testing connection to db: ", err)
+	}
+
 	r := gin.Default()
 	r.GET("/ping", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{
@@ -16,9 +30,9 @@ func main() {
 		})
 	})
 	r.POST("/dice/roll", diceRollHandler)
-	err := r.Run(":8080")
+	err = r.Run(":8080")
 	if err != nil {
-		log.Fatal("Error when running")
+		log.Fatal("Error while running api server: ", err)
 	}
 }
 
