@@ -1,5 +1,6 @@
-.PHONY: install-migrate
-install-migrate:
+MIGRATE := /usr/local/bin/migrate
+
+$(MIGRATE):
 	go get -u -d github.com/golang-migrate/migrate/cli github.com/lib/pq
 	go build -tags 'postgres' -o /usr/local/bin/migrate github.com/golang-migrate/migrate/cli
 
@@ -10,6 +11,9 @@ create-docker-db:
 .PHONY: clean-docker-containers
 clean-docker-containers:
 	docker stop diceroller-db && docker rm diceroller-db
+
+migrate: $(MIGRATE)
+	$(MIGRATE) -path $(CURDIR)/migrations -database "postgres://diceroller:diceroller@localhost/diceroller?sslmode=disable" up
 
 .PHONY: clean
 clean:
