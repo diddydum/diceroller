@@ -34,8 +34,16 @@ func main() {
 	r := gin.Default()
 	r.GET("/ping", server.pingHandler)
 	r.POST("/dice/roll", server.diceRollHandler)
-	r.POST("/rooms", server.addRoomHandler)
-	r.POST("/users", server.addUserHandler)
+	r.POST("/room", server.addRoomHandler)
+	r.POST("/user", server.addUserHandler)
+
+	// Authenticated routes go here
+	authenticated := r.Group("/")
+	authenticated.Use(server.authenticated())
+	{
+		// TODO actually use a real join handler; right now this is just a dummy implementation for testing
+		authenticated.POST("/room/:name/join", server.pingHandler)
+	}
 
 	err = r.Run(":8080")
 	if err != nil {
@@ -43,8 +51,42 @@ func main() {
 	}
 }
 
+// TODO move initialization/run to the server
 type Server struct {
 	db *sql.DB
+}
+
+// TODO this type likely needs to be shared outside of server context
+type User struct {
+	id        string
+	createdAt time.Time
+	name      string
+}
+
+func (s *Server) authenticated() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		auth := c.GetHeader("Authorization")
+
+		if !strings.HasPrefix(auth, "Bearer ") {
+			c.AbortWithStatus(http.StatusForbidden)
+			return
+		}
+
+		token := auth[len("Bearer "):]
+
+		var user User
+		err := s.db.QueryRow("SELECT id, created_at, name FROM users WHERE token = $1", token).Scan(&user.id, &user.createdAt, &user.name)
+		switch {
+		case err == sql.ErrNoRows:
+			c.AbortWithStatus(http.StatusForbidden)
+		case err != nil:
+			log.Printf("Error while looking up bearer token: %v", err)
+			c.AbortWithStatus(http.StatusInternalServerError)
+		default:
+			c.Set("user", user)
+			c.Next()
+		}
+	}
 }
 
 func (s *Server) pingHandler(c *gin.Context) {
@@ -112,16 +154,11 @@ func (s *Server) addUserHandler(c *gin.Context) {
 	}
 
 	token := generateToken()
-	result, err := s.db.Exec("INSERT INTO users (token, name) VALUES ($1, $2)", token, name)
+
+	var id string
+	err := s.db.QueryRow("INSERT INTO users (token, name) VALUES ($1, $2) RETURNING id", token, name).Scan(&id)
 	if err != nil {
 		log.Printf("Error while creating user: %v", err)
-		c.AbortWithStatus(http.StatusInternalServerError)
-		return
-	}
-
-	id, err := result.LastInsertId()
-	if err != nil {
-		log.Printf("Unable to extract last insert id for user: %v", err)
 		c.AbortWithStatus(http.StatusInternalServerError)
 		return
 	}
@@ -133,6 +170,7 @@ func (s *Server) addUserHandler(c *gin.Context) {
 	})
 }
 
+// TODO rename to more generic name
 func generateToken() string {
 	alphabet := "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
 	var buffer bytes.Buffer
