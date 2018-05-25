@@ -16,44 +16,10 @@ import (
 	_ "github.com/lib/pq"
 )
 
-func main() {
-	// Seed according to time
-	rand.Seed(time.Now().UnixNano())
-
-	connStr := "postgres://diceroller:diceroller@localhost/diceroller?sslmode=disable"
-	db, err := sql.Open("postgres", connStr)
-	if err != nil {
-		log.Fatal("Error while connecting to postgres: ", err)
-	}
-	if err := db.Ping(); err != nil {
-		log.Fatal("Error while testing connection to db: ", err)
-	}
-
-	server := Server{db: db}
-
-	r := gin.Default()
-	r.GET("/ping", server.pingHandler)
-	r.POST("/dice/roll", server.diceRollHandler)
-	r.POST("/room", server.addRoomHandler)
-	r.POST("/user", server.addUserHandler)
-
-	// Authenticated routes go here
-	authenticated := r.Group("/")
-	authenticated.Use(server.authenticated())
-	{
-		// TODO actually use a real join handler; right now this is just a dummy implementation for testing
-		authenticated.POST("/room/:name/join", server.pingHandler)
-	}
-
-	err = r.Run(":8080")
-	if err != nil {
-		log.Fatal("Error while running api server: ", err)
-	}
-}
-
-// TODO move initialization/run to the server
+// Server is the Diceroller API server. Use NewServer to construct and Run to start.
 type Server struct {
 	db *sql.DB
+	r  *gin.Engine
 }
 
 // TODO this type likely needs to be shared outside of server context
@@ -61,6 +27,36 @@ type User struct {
 	id        string
 	createdAt time.Time
 	name      string
+}
+
+// NewServer constructs a new instance of the DiceRoller server. Use Run() to start.
+func NewServer(db *sql.DB) *Server {
+	s := Server{db: db}
+	r := gin.Default()
+
+	// High level routes go here
+	r.GET("/ping", s.pingHandler)
+	r.POST("/dice/roll", s.diceRollHandler)
+	r.POST("/room", s.addRoomHandler)
+	r.POST("/user", s.addUserHandler)
+
+	// Authenticated routes go here
+	authenticated := r.Group("/")
+	authenticated.Use(s.authenticated())
+	{
+		// TODO actually use a real join handler; right now this is just a dummy implementation for testing
+		authenticated.POST("/room/:name/join", s.pingHandler)
+	}
+
+	s.r = r
+
+	return &s
+}
+
+// Run starts the server; give it a port like ':8080' or include hostname as well.
+// See gin's documentation on run for more info.
+func (s *Server) Run(host string) error {
+	return s.r.Run(host)
 }
 
 func (s *Server) authenticated() gin.HandlerFunc {
