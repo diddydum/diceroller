@@ -22,13 +22,6 @@ type Server struct {
 	r  *gin.Engine
 }
 
-// TODO this type likely needs to be shared outside of server context
-type User struct {
-	id        string
-	createdAt time.Time
-	name      string
-}
-
 // NewServer constructs a new instance of the DiceRoller server. Use Run() to start.
 func NewServer(db *sql.DB) *Server {
 	s := Server{db: db}
@@ -38,7 +31,7 @@ func NewServer(db *sql.DB) *Server {
 	r.GET("/ping", s.pingHandler)
 	r.POST("/dice/roll", s.diceRollHandler)
 	r.POST("/room", s.addRoomHandler)
-	r.POST("/user", s.addUserHandler)
+	r.POST("/user", s.createUserHandler)
 
 	// Authenticated routes go here
 	authenticated := r.Group("/")
@@ -71,7 +64,7 @@ func (s *Server) authenticated() gin.HandlerFunc {
 		token := auth[len("Bearer "):]
 
 		var user User
-		err := s.db.QueryRow("SELECT id, created_at, name FROM users WHERE token = $1", token).Scan(&user.id, &user.createdAt, &user.name)
+		err := s.db.QueryRow("SELECT id, created_at, name FROM users WHERE token = $1", token).Scan(&user.Id, &user.CreatedAt, &user.Name)
 		switch {
 		case err == sql.ErrNoRows:
 			c.AbortWithStatus(http.StatusForbidden)
@@ -92,6 +85,7 @@ func (s *Server) pingHandler(c *gin.Context) {
 }
 
 func (s *Server) diceRollHandler(c *gin.Context) {
+	// TODO use api types + validation
 	numStr := c.DefaultQuery("num", "1")
 	sidesStr := c.Query("sides")
 
@@ -118,6 +112,7 @@ func (s *Server) diceRollHandler(c *gin.Context) {
 }
 
 func (s *Server) addRoomHandler(c *gin.Context) {
+	// TODO use api types + validation
 	name := c.Query("name")
 	if len(name) > 64 {
 		c.JSON(http.StatusBadRequest, gin.H{
@@ -140,29 +135,29 @@ func (s *Server) addRoomHandler(c *gin.Context) {
 	})
 }
 
-func (s *Server) addUserHandler(c *gin.Context) {
-	name := strings.TrimSpace(c.Query("name"))
-	if len(name) > 32 || len(name) < 2 {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"message": "Bad length for name, constraint must hold: (33 > name > 1)",
-		})
+func (s *Server) createUserHandler(c *gin.Context) {
+	var createUserRequest CreateUserRequest
+	err := c.Bind(&createUserRequest)
+	if err != nil {
 		return
 	}
-
 	token := generateToken()
 
 	var id string
-	err := s.db.QueryRow("INSERT INTO users (token, name) VALUES ($1, $2) RETURNING id", token, name).Scan(&id)
+	var createdAt time.Time
+	err = s.db.QueryRow("INSERT INTO users (token, name) VALUES ($1, $2) RETURNING id, created_at", token, createUserRequest.Name).Scan(&id, &createdAt)
 	if err != nil {
 		log.Printf("Error while creating user: %v", err)
 		c.AbortWithStatus(http.StatusInternalServerError)
 		return
 	}
 
-	c.JSON(http.StatusCreated, gin.H{
-		"id":    id,
-		"name":  name,
-		"token": token,
+	c.JSON(http.StatusCreated, CreateUserResponse{
+		User: User{
+			Id:        id,
+			CreatedAt: createdAt,
+			Name:      createUserRequest.Name,
+		},
 	})
 }
 
